@@ -1,5 +1,3 @@
-pyTelegramBotAPI
-pytz
-Pillow
-pytesseract
+pyTelegramBotAPI==4.28.0
+pytz==2024.1
 

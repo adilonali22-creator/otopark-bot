@@ -7,7 +7,7 @@ from telebot import apihelper
 
 # Token'ı doğrudan buraya yapıştırdık, Render ayarlarıyla uğraşmana gerek kalmadı.
 # EĞER HATA ALIRSAN, @BotFather'dan YENİ BİR TOKEN ALIP TIRNAK İÇİNE YAZ.
-TOKEN = "8629632358:AAGRpPRIy083KuEIXDft42D3rKLFPJTSI44"
+TOKEN = "8956351837:AAHKLSz02NxLn0bDU4Sz7hq0tpg3k7zjB24"
 
 apihelper.SESSION_TIME_TO_LIVE = 5 * 60
 

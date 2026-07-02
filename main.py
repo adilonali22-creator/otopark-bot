@@ -72,4 +72,20 @@ if __name__ == "__main__":
     # Flask sunucusunu başlat (Render'ın port hatasını bitiren kısım burası)
     threading.Thread(target=lambda: app.run(host="0.0.0.0", port=PORT)).start()
     bot.infinity_polling()
-    
+
+import pytz # Zaten eklemiştin
+# ... diğer importlar ...
+
+# Şu kısmı kodunun en başına, pytz ekledikten sonra koy:
+TETOVO_TZ = pytz.timezone('Europe/Skopje')
+
+# Sonra 'islem' fonksiyonunun içindeki şu satırı güncelle:
+# ESKİSİ: giris_vakti = datetime.now().strftime("%H:%M")
+# YENİSİ:
+giris_vakti = datetime.now(TETOVO_TZ).strftime("%H:%M")
+
+# Çıkış kısmındaki (islem fonksiyonunun içi) simdi değişkenini de güncelle:
+# ESKİSİ: simdi = datetime.now()
+# YENİSİ:
+simdi = datetime.now(TETOVO_TZ)
+

@@ -2,5 +2,9 @@ pyTelegramBotAPI
 pytz
 Flask
 Pillow
+aiogram
+easyocr
+opencv-python-headless
+
 
 

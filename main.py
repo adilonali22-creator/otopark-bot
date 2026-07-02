@@ -4,15 +4,9 @@ import json
 import math
 from datetime import datetime
 import pytz
-from PIL import Image, ImageDraw
 
-# YENİ TOKEN'INI BURAYA GÜNCELLEDİM
-TOKEN = "8925524634:AAHx26QKCGifYHLR_VLON6IAqTeeuJmauQg"
-
-# Telegram botunu başlat ve eski bağlantıları temizle (Conflict hatasını engeller)
+TOKEN = "8925524634:AAHx26QKCGifYHLR_VLON6IAq TeeuJmauQg"
 bot = telebot.TeleBot(TOKEN)
-bot.remove_webhook() 
-
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')
 
@@ -39,19 +33,6 @@ def ucret_hesapla(toplam_dakika):
         ucret += (ekstra_dilim * 10)
     return ucret
 
-def plaka_resmi_olustur_ve_kaydet(plaka, saat):
-    # 400x200 boyutunda beyaz bir resim oluştur
-    img = Image.new('RGB', (400, 200), color=(255, 255, 255))
-    d = ImageDraw.Draw(img)
-    
-    # Bilgileri resmin üzerine yaz
-    d.text((50, 60), f"PLAKA: {plaka}", fill=(0, 0, 0))
-    d.text((50, 100), f"GIRIS: {saat}", fill=(0, 0, 0))
-    
-    dosya_adi = f"{plaka}.png"
-    img.save(dosya_adi)
-    return dosya_adi
-
 @bot.message_handler(func=lambda message: True)
 def islem(message):
     if message.text.startswith('/'): return
@@ -67,7 +48,6 @@ def islem(message):
             giris_dt = datetime.strptime(giris_saati_str, "%H:%M")
             simdi = datetime.now(ZAMAN_DILIMI)
             
-            # Gün geçişlerini de doğru hesaplamak için tarih kontrolü (opsiyonel basit hali)
             giris_tam = simdi.replace(hour=giris_dt.hour, minute=giris_dt.minute, second=0, microsecond=0)
             delta = simdi - giris_tam
             toplam_dakika = int(delta.total_seconds() / 60)
@@ -75,18 +55,19 @@ def islem(message):
             
             ucret = ucret_hesapla(toplam_dakika)
             
+            # Kalın yazı formatı (Markdown)
             cevap = (
                 f"📤 *{plaka} ÇIKIŞ YAPTI*\n\n"
-                f"🕒 GİRİŞ: *{giris_saati_str}*\n"
-                f"⏳ SÜRE: *{toplam_dakika} dk*\n"
-                f"💰 TUTAR: *{ucret} DENAR*"
+                f"🕒 GİRİŞ SAATİ: *{giris_saati_str}*\n"
+                f"⏳ TOPLAM SÜRE: *{toplam_dakika} dakika*\n"
+                f"💰 ÖDENECEK TUTAR: *{ucret} DENAR*"
             )
             bot.reply_to(message, cevap, parse_mode="Markdown")
             
             del veriler[plaka]
             verileri_kaydet(veriler)
         else:
-            bot.reply_to(message, "❌ Plaka kayıtlı değil.")
+            bot.reply_to(message, "❌ Bu plaka kayıtlı değil.")
     
     # GİRİŞ İŞLEMİ
     else:
@@ -94,11 +75,7 @@ def islem(message):
         giris_vakti = datetime.now(ZAMAN_DILIMI).strftime("%H:%M")
         veriler[plaka] = {"giris": giris_vakti}
         verileri_kaydet(veriler)
-        
-        # Resim oluştur
-        plaka_resmi_olustur_ve_kaydet(plaka, giris_vakti)
-        
-        bot.reply_to(message, f"✅ *{plaka}* giriş yaptı.\n🕒 Giriş: *{giris_vakti}*\n📸 Bilet resmi kaydedildi.", parse_mode="Markdown")
+        bot.reply_to(message, f"✅ *{plaka}* giriş yaptı.\n🕒 Giriş Saati: *{giris_vakti}*", parse_mode="Markdown")
 
 print("Bot aktif...")
-bot.polling(none_stop=True) # Render için en kararlı çalışma modu
+bot.infinity_polling()

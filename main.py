@@ -5,12 +5,9 @@ from datetime import datetime
 import pytz
 from telebot import apihelper
 
-# Render ortamından token'ı çekiyoruz (Güvenli yöntem)
-TOKEN = os.environ.get("BOT_TOKEN")
-
-if not TOKEN:
-    print("HATA: BOT_TOKEN tanımlı değil! Render -> Environment kısmından ekleyin.")
-    exit()
+# Token'ı doğrudan buraya yapıştırdık, Render ayarlarıyla uğraşmana gerek kalmadı.
+# EĞER HATA ALIRSAN, @BotFather'dan YENİ BİR TOKEN ALIP TIRNAK İÇİNE YAZ.
+TOKEN = "8629632358:AAGRpPRIy083KuEIXDft42D3rKLFPJTSI44"
 
 apihelper.SESSION_TIME_TO_LIVE = 5 * 60
 
@@ -53,7 +50,6 @@ def komutlar(message):
 
 @bot.message_handler(content_types=['text'])
 def cikis(message):
-    # Eğer komut değilse çıkış işlemi olarak algıla
     if message.text.startswith('/'): return 
     
     plaka = message.text.upper().strip()
@@ -65,5 +61,5 @@ def cikis(message):
     else:
         bot.reply_to(message, "❌ Plaka bulunamadı.")
 
-print("Bot çalışıyor...")
+print("Bot başlatılıyor...")
 bot.polling(none_stop=True)

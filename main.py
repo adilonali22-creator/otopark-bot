@@ -5,7 +5,7 @@ import math
 from datetime import datetime
 import pytz
 
-TOKEN = "8925524634:AAHx26QKCGifYHLR_VLON6IAq TeeuJmauQg"
+TOKEN = "8925524634:AAHx26QKCGifYHLR_VLON6IAqTeeuJmauQg"
 bot = telebot.TeleBot(TOKEN)
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')

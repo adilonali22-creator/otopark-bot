@@ -1,15 +1,12 @@
 import telebot
 import os
 import json
-import pytesseract
-from PIL import Image
+import math
 from datetime import datetime
 import pytz
 
-# Token'ın burada, başka hiçbir yere dokunma
 TOKEN = "8925524634:AAEwFF9ZIxchbgiqZCJkQ9HqrSWqCWpvPq8"
 bot = telebot.TeleBot(TOKEN)
-
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')
 
@@ -25,53 +22,60 @@ def verileri_kaydet(veri):
     with open(VERI_DOSYASI, "w", encoding="utf-8") as f:
         json.dump(veri, f, ensure_ascii=False, indent=4)
 
-# --- FOTOĞRAF İŞLEME (Resim gelirse burası çalışır) ---
-@bot.message_handler(content_types=['photo'])
-def resim_isle(message):
-    try:
-        file_id = message.photo[-1].file_id
-        file_info = bot.get_file(file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        dosya = "temp_plaka.jpg"
-        with open(dosya, "wb") as f:
-            f.write(downloaded_file)
-        
-        plaka = pytesseract.image_to_string(Image.open(dosya)).strip().upper()
-        os.remove(dosya)
-        
-        if not plaka:
-            bot.reply_to(message, "❌ Plaka okunamadı, lütfen daha net çek.")
-            return
-            
-        veriler = verileri_yukle()
-        if plaka in veriler:
-            del veriler[plaka]
-            verileri_kaydet(veriler)
-            bot.reply_to(message, f"📤 {plaka} çıkış yaptı.")
-        else:
-            veriler[plaka] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
-            verileri_kaydet(veriler)
-            bot.reply_to(message, f"✅ {plaka} giriş yaptı.")
-    except Exception as e:
-        bot.reply_to(message, f"Hata: {e}")
+def ucret_hesapla(toplam_dakika):
+    if toplam_dakika <= 60:
+        return 40
+    saat = toplam_dakika // 60
+    dakika_kalan = toplam_dakika % 60
+    ucret = saat * 40
+    if dakika_kalan > 0:
+        ekstra_dilim = math.ceil(dakika_kalan / 15)
+        ucret += (ekstra_dilim * 10)
+    return ucret
 
-# --- METİN İŞLEME (Plaka yazarsan burası çalışır) ---
 @bot.message_handler(func=lambda message: True)
-def metin_isle(message):
+def islem(message):
     if message.text.startswith('/'): return
     
-    plaka = message.text.upper().strip()
+    metin = message.text.lower().strip()
     veriler = verileri_yukle()
+
+    # ÇIKIŞ İŞLEMİ
+    if metin.startswith('.exit'):
+        plaka = metin.replace(".exit", "").strip().upper()
+        if plaka in veriler:
+            giris_saati_str = veriler[plaka]["giris"]
+            giris_dt = datetime.strptime(giris_saati_str, "%H:%M")
+            simdi = datetime.now(ZAMAN_DILIMI)
+            
+            giris_tam = simdi.replace(hour=giris_dt.hour, minute=giris_dt.minute, second=0, microsecond=0)
+            delta = simdi - giris_tam
+            toplam_dakika = int(delta.total_seconds() / 60)
+            if toplam_dakika < 0: toplam_dakika = 0
+            
+            ucret = ucret_hesapla(toplam_dakika)
+            
+            # Kalın yazı formatı (Markdown)
+            cevap = (
+                f"📤 *{plaka} ÇIKIŞ YAPTI*\n\n"
+                f"🕒 GİRİŞ SAATİ: *{giris_saati_str}*\n"
+                f"⏳ TOPLAM SÜRE: *{toplam_dakika} dakika*\n"
+                f"💰 ÖDENECEK TUTAR: *{ucret} DENAR*"
+            )
+            bot.reply_to(message, cevap, parse_mode="Markdown")
+            
+            del veriler[plaka]
+            verileri_kaydet(veriler)
+        else:
+            bot.reply_to(message, "❌ Bu plaka kayıtlı değil.")
     
-    if plaka in veriler:
-        del veriler[plaka]
-        verileri_kaydet(veriler)
-        bot.reply_to(message, f"📤 {plaka} çıkış yaptı.")
+    # GİRİŞ İŞLEMİ
     else:
-        veriler[plaka] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
+        plaka = metin.upper()
+        giris_vakti = datetime.now(ZAMAN_DILIMI).strftime("%H:%M")
+        veriler[plaka] = {"giris": giris_vakti}
         verileri_kaydet(veriler)
-        bot.reply_to(message, f"✅ {plaka} giriş yaptı.")
+        bot.reply_to(message, f"✅ *{plaka}* giriş yaptı.\n🕒 Giriş Saati: *{giris_vakti}*", parse_mode="Markdown")
 
 print("Bot aktif...")
 bot.infinity_polling()

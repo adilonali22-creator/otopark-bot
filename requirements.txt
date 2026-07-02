@@ -1,1 +1,5 @@
+pyTelegramBotAPI
+pytz
+Pillow
+pytesseract
 

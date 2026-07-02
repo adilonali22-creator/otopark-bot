@@ -1,5 +1,6 @@
 pyTelegramBotAPI
 pytz
 Flask
+Pillow
 
 

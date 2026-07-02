@@ -6,34 +6,59 @@ from PIL import Image
 from datetime import datetime
 import pytz
 
+# Token'ın burada, başka hiçbir yere dokunma
 TOKEN = "8925524634:AAEwFF9ZIxchbgiqZCJkQ9HqrSWqCWpvPq8"
 bot = telebot.TeleBot(TOKEN)
+
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')
 
-# ... verileri_yukle ve verileri_kaydet fonksiyonları aynı kalacak ...
+def verileri_yukle():
+    if os.path.exists(VERI_DOSYASI):
+        try:
+            with open(VERI_DOSYASI, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except: return {}
+    return {}
 
+def verileri_kaydet(veri):
+    with open(VERI_DOSYASI, "w", encoding="utf-8") as f:
+        json.dump(veri, f, ensure_ascii=False, indent=4)
+
+# --- FOTOĞRAF İŞLEME (Resim gelirse burası çalışır) ---
 @bot.message_handler(content_types=['photo'])
 def resim_isle(message):
-    file_id = message.photo[-1].file_id
-    file_info = bot.get_file(file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
-    
-    with open("temp.jpg", "wb") as new_file:
-        new_file.write(downloaded_file)
-    
-    # Plaka okuma (Tesseract OCR)
-    plaka = pytesseract.image_to_string("temp.jpg").strip().upper()
-    os.remove("temp.jpg") # Resmi siliyoruz
-    
-    # Plakayı kaydetme işlemi
-    veriler = verileri_yukle()
-    veriler[plaka] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
-    verileri_kaydet(veriler)
-    bot.reply_to(message, f"📸 Fotoğraftan okunan plaka: {plaka}\n✅ Kaydedildi.")
+    try:
+        file_id = message.photo[-1].file_id
+        file_info = bot.get_file(file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        dosya = "temp_plaka.jpg"
+        with open(dosya, "wb") as f:
+            f.write(downloaded_file)
+        
+        plaka = pytesseract.image_to_string(Image.open(dosya)).strip().upper()
+        os.remove(dosya)
+        
+        if not plaka:
+            bot.reply_to(message, "❌ Plaka okunamadı, lütfen daha net çek.")
+            return
+            
+        veriler = verileri_yukle()
+        if plaka in veriler:
+            del veriler[plaka]
+            verileri_kaydet(veriler)
+            bot.reply_to(message, f"📤 {plaka} çıkış yaptı.")
+        else:
+            veriler[plaka] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
+            verileri_kaydet(veriler)
+            bot.reply_to(message, f"✅ {plaka} giriş yaptı.")
+    except Exception as e:
+        bot.reply_to(message, f"Hata: {e}")
 
-@bot.message_handler(content_types=['text'])
-def mesaj_isle(message):
+# --- METİN İŞLEME (Plaka yazarsan burası çalışır) ---
+@bot.message_handler(func=lambda message: True)
+def metin_isle(message):
     if message.text.startswith('/'): return
     
     plaka = message.text.upper().strip()
@@ -42,11 +67,11 @@ def mesaj_isle(message):
     if plaka in veriler:
         del veriler[plaka]
         verileri_kaydet(veriler)
-        bot.reply_to(message, f"📤 {plaka} çıkış yaptı. (40 Denar)")
+        bot.reply_to(message, f"📤 {plaka} çıkış yaptı.")
     else:
-        # Plaka kayıtlı değilse GİRİŞ yap
         veriler[plaka] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
         verileri_kaydet(veriler)
         bot.reply_to(message, f"✅ {plaka} giriş yaptı.")
 
+print("Bot aktif...")
 bot.infinity_polling()

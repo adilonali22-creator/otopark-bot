@@ -1,5 +1,5 @@
 pyTelegramBotAPI
-pytesseract
-Pillow
 pytz
+Flask
+
 

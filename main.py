@@ -4,7 +4,19 @@ import json
 import math
 from datetime import datetime
 import pytz
+from flask import Flask
+from threading import Thread
 
+# Flask web sunucusu (Render'ın port hatasını engellemek için)
+app = Flask(__name__)
+@app.route('/')
+def home():
+    return "Bot aktif!"
+
+def run_flask():
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+
+# Token düzenlemesi: Aradaki boşluğu sildim
 TOKEN = "8925524634:AAEmc6YhLixJqCz3wN87JG2Hu4s6JAHH4Bk"
 bot = telebot.TeleBot(TOKEN)
 VERI_DOSYASI = "otopark_verileri.json"
@@ -55,7 +67,6 @@ def islem(message):
             
             ucret = ucret_hesapla(toplam_dakika)
             
-            # Kalın yazı formatı (Markdown)
             cevap = (
                 f"📤 *{plaka} ÇIKIŞ YAPTI*\n\n"
                 f"🕒 GİRİŞ SAATİ: *{giris_saati_str}*\n"
@@ -77,5 +88,9 @@ def islem(message):
         verileri_kaydet(veriler)
         bot.reply_to(message, f"✅ *{plaka}* giriş yaptı.\n🕒 Giriş Saati: *{giris_vakti}*", parse_mode="Markdown")
 
-print("Bot aktif...")
-bot.infinity_polling()
+if __name__ == "__main__":
+    # Web sunucusunu başlat
+    Thread(target=run_flask).start()
+    print("Bot ve Web sunucusu aktif...")
+    bot.infinity_polling()
+    

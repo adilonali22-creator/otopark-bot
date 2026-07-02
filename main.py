@@ -4,7 +4,6 @@ import json
 from datetime import datetime
 import pytz
 
-# Token'ını otomatik yerleştirdim
 TOKEN = "8629632358:AAGRpPRIy083KuEIXDft42D3rKLFPJTSI44"
 
 # PythonAnywhere için özel bağlantı ayarı

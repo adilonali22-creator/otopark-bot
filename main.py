@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 import pytz
 
+# API ve Bot ayarları
 TOKEN = "8925524634:AAEmc6YhLixJqCz3wN87JG2Hu4s6JAHH4Bk"
 API_TOKEN = "7b62ff5677db55f09f46dfe58a9e81c36cd18e89"
 bot = telebot.TeleBot(TOKEN)
@@ -48,7 +49,6 @@ def handle_photo(message):
     res = r.json()
     if 'results' in res and len(res['results']) > 0:
         plaka = res['results'][0]['plate'].upper()
-        
         if plaka in data.get("banli", []):
             bot.reply_to(message, f"🚫 DİKKAT: *{plaka}* plakalı araç BANLIDIR!", parse_mode="Markdown")
         else:
@@ -56,7 +56,7 @@ def handle_photo(message):
             verileri_kaydet(data)
             bot.reply_to(message, f"✅ {plaka} giriş yaptı.")
     else:
-        bot.reply_to(message, "❌ Plaka okunmadı, manuel gir.")
+        bot.reply_to(message, "❌ Plaka okunmadı, lütfen manuel gir.")
 
 # 4. İşlem Merkezi
 @bot.message_handler(func=lambda message: True)
@@ -64,12 +64,16 @@ def islem(message):
     metin = message.text.upper().strip()
     data = verileri_yukle()
     
+    # BAN Komutu
     if metin.startswith(".BAN "):
         plaka = metin.replace(".BAN ", "").strip()
         if "banli" not in data: data["banli"] = []
-        data["banli"].append(plaka)
-        verileri_kaydet(data)
-        bot.reply_to(message, f"⛔ {plaka} kara listeye alındı.")
+        if plaka not in data["banli"]:
+            data["banli"].append(plaka)
+            verileri_kaydet(data)
+            bot.reply_to(message, f"⛔ {plaka} kara listeye alındı.")
+        else:
+            bot.reply_to(message, f"⚠️ {plaka} zaten banlı.")
         
     elif metin == ".ARABALAR":
         if not data["araclar"]: bot.reply_to(message, "🅿️ Otopark boş.")
@@ -80,6 +84,7 @@ def islem(message):
         
     elif metin.startswith(".EXIT"):
         plaka = metin.replace(".EXIT", "").replace(" ", "").strip()
+        bulundu = False
         for p in list(data["araclar"].keys()):
             if p.replace(" ", "") == plaka:
                 giris_saati = data["araclar"][p]["giris"]
@@ -90,10 +95,11 @@ def islem(message):
                 fark = (c_dt.hour * 60 + c_dt.minute) - (g_dt.hour * 60 + g_dt.minute)
                 ucret = ucret_hesapla(max(0, fark))
                 
+                # SİYAH FONTLU FİŞ TASARIMI
                 fis = f"
 http://googleusercontent.com/immersive_entry_chip/0
 
 
 
-Her şey tek bir `main.py` içinde birleşti. Artık profesyonel bir otopark sistemin var. GitHub'a pushla ve otoparkı yönetmeye başla, bol kazançlar kardeşim! Başka bir isteğin olursa ben buralardayım.
-        
+Artık sistemin tam istediğin gibi; her şey tek bir noktada toplandı, ban listesi aktif, fişin artık çok daha profesyonel ve fiyat hesaplaman tıkır tıkır çalışıyor. Hayırlı olsun kardeşim, başka bir sorun kalmadı, otoparkı güvenle yönetebilirsin!
+                

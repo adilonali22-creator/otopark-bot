@@ -6,8 +6,9 @@ from datetime import datetime
 import pytz
 from flask import Flask
 from threading import Thread
+import easyocr
 
-# Flask web sunucusu (Render'ın port hatasını engellemek için)
+# Flask web sunucusu
 app = Flask(__name__)
 @app.route('/')
 def home():
@@ -16,81 +17,91 @@ def home():
 def run_flask():
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
-# Token düzenlemesi: Aradaki boşluğu sildim
+# AYARLAR
 TOKEN = "8925524634:AAEmc6YhLixJqCz3wN87JG2Hu4s6JAHH4Bk"
 bot = telebot.TeleBot(TOKEN)
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')
+reader = easyocr.Reader(['en']) 
 
 def verileri_yukle():
     if os.path.exists(VERI_DOSYASI):
         try:
             with open(VERI_DOSYASI, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except: return {}
-    return {}
+                data = json.load(f)
+                if "araclar" not in data: return {"araclar": data, "toplam_kazanc": 0}
+                return data
+        except: return {"araclar": {}, "toplam_kazanc": 0}
+    return {"araclar": {}, "toplam_kazanc": 0}
 
 def verileri_kaydet(veri):
     with open(VERI_DOSYASI, "w", encoding="utf-8") as f:
         json.dump(veri, f, ensure_ascii=False, indent=4)
 
 def ucret_hesapla(toplam_dakika):
-    if toplam_dakika <= 60:
-        return 40
+    if toplam_dakika <= 60: return 40
     saat = toplam_dakika // 60
     dakika_kalan = toplam_dakika % 60
-    ucret = saat * 40
-    if dakika_kalan > 0:
-        ekstra_dilim = math.ceil(dakika_kalan / 15)
-        ucret += (ekstra_dilim * 10)
+    ucret = saat * 40 + (math.ceil(dakika_kalan / 15) * 10)
     return ucret
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    file_info = bot.get_file(message.photo[-1].file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+    file_path = "temp_plaka.jpg"
+    with open(file_path, "wb") as f: f.write(downloaded_file)
+    
+    try:
+        results = reader.readtext(file_path, detail=0, allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
+        plaka = "".join(results).upper()
+        if plaka:
+            message.text = plaka
+            bot.reply_to(message, f"🔍 Tespit edilen: *{plaka}*", parse_mode="Markdown")
+            islem(message)
+        else:
+            bot.reply_to(message, "❌ Plaka okunamadı.")
+    finally:
+        if os.path.exists(file_path): os.remove(file_path)
 
 @bot.message_handler(func=lambda message: True)
 def islem(message):
     if message.text.startswith('/'): return
-    
     metin = message.text.lower().strip()
-    veriler = verileri_yukle()
+    data = verileri_yukle()
+    veriler = data["araclar"]
 
-    # ÇIKIŞ İŞLEMİ
-    if metin.startswith('.exit'):
+    if metin == ".arabalar":
+        if not veriler: bot.reply_to(message, "🅿️ Otopark boş.")
+        else:
+            liste = "\n".join([f"🚗 {p} (Giriş: {v['giris']})" for p, v in veriler.items()])
+            bot.reply_to(message, f"📋 *İçerideki Araçlar:*\n\n{liste}", parse_mode="Markdown")
+    
+    elif metin == ".promet":
+        bot.reply_to(message, f"💰 *Toplam Gelir: {data['toplam_kazanc']} DENAR*", parse_mode="Markdown")
+
+    elif metin.startswith('.exit'):
         plaka = metin.replace(".exit", "").strip().upper()
         if plaka in veriler:
-            giris_saati_str = veriler[plaka]["giris"]
-            giris_dt = datetime.strptime(giris_saati_str, "%H:%M")
+            giris_dt = datetime.strptime(veriler[plaka]["giris"], "%H:%M")
             simdi = datetime.now(ZAMAN_DILIMI)
+            delta = (simdi - simdi.replace(hour=giris_dt.hour, minute=giris_dt.minute, second=0, microsecond=0)).total_seconds() / 60
+            ucret = ucret_hesapla(int(max(0, delta)))
             
-            giris_tam = simdi.replace(hour=giris_dt.hour, minute=giris_dt.minute, second=0, microsecond=0)
-            delta = simdi - giris_tam
-            toplam_dakika = int(delta.total_seconds() / 60)
-            if toplam_dakika < 0: toplam_dakika = 0
-            
-            ucret = ucret_hesapla(toplam_dakika)
-            
-            cevap = (
-                f"📤 *{plaka} ÇIKIŞ YAPTI*\n\n"
-                f"🕒 GİRİŞ SAATİ: *{giris_saati_str}*\n"
-                f"⏳ TOPLAM SÜRE: *{toplam_dakika} dakika*\n"
-                f"💰 ÖDENECEK TUTAR: *{ucret} DENAR*"
-            )
-            bot.reply_to(message, cevap, parse_mode="Markdown")
-            
+            data["toplam_kazanc"] += ucret
             del veriler[plaka]
-            verileri_kaydet(veriler)
-        else:
-            bot.reply_to(message, "❌ Bu plaka kayıtlı değil.")
+            verileri_kaydet(data)
+            bot.reply_to(message, f"📤 *{plaka}* çıkış yaptı.\n💰 Ödeme: *{ucret} DENAR*", parse_mode="Markdown")
+        else: bot.reply_to(message, "❌ Bu plaka kayıtlı değil.")
     
-    # GİRİŞ İŞLEMİ
     else:
         plaka = metin.upper()
         giris_vakti = datetime.now(ZAMAN_DILIMI).strftime("%H:%M")
         veriler[plaka] = {"giris": giris_vakti}
-        verileri_kaydet(veriler)
-        bot.reply_to(message, f"✅ *{plaka}* giriş yaptı.\n🕒 Giriş Saati: *{giris_vakti}*", parse_mode="Markdown")
+        verileri_kaydet(data)
+        bot.reply_to(message, f"✅ *{plaka}* giriş yaptı.", parse_mode="Markdown")
 
 if __name__ == "__main__":
-    # Web sunucusunu başlat
     Thread(target=run_flask).start()
-    print("Bot ve Web sunucusu aktif...")
     bot.infinity_polling()
     

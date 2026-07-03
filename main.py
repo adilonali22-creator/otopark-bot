@@ -2,6 +2,7 @@ import telebot
 import os
 import json
 import math
+import time
 from datetime import datetime
 import pytz
 from flask import Flask
@@ -9,14 +10,15 @@ from threading import Thread
 import pytesseract
 from PIL import Image
 
-# Flask web sunucusu
+# Flask web sunucusu (Render için)
 app = Flask(__name__)
 @app.route('/')
 def home():
     return "Bot aktif!"
 
 def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
 
 # AYARLAR
 TOKEN = "8925524634:AAEmc6YhLixJqCz3wN87JG2Hu4s6JAHH4Bk"
@@ -53,7 +55,6 @@ def handle_photo(message):
     with open(file_path, "wb") as f: f.write(downloaded_file)
     
     try:
-        # Pytesseract ile okuma (psm 7: tek satır, whitelist: sadece harf/rakam)
         plaka = pytesseract.image_to_string(
             Image.open(file_path), 
             config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
@@ -64,7 +65,7 @@ def handle_photo(message):
             bot.reply_to(message, f"🔍 Tespit edilen: *{plaka}*", parse_mode="Markdown")
             islem(message)
         else:
-            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen daha net ve yakın çek.")
+            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen daha net çek.")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
@@ -107,5 +108,6 @@ def islem(message):
 
 if __name__ == "__main__":
     Thread(target=run_flask).start()
+    time.sleep(5) # Render portu yakalasın diye
     bot.infinity_polling()
-        
+    

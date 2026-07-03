@@ -3,14 +3,14 @@ import os
 import json
 import math
 import time
+import requests # API üzerinden okuma yapmak için
+import re
 from datetime import datetime
 import pytz
 from flask import Flask
 from threading import Thread
-import pytesseract
-from PIL import Image
 
-# Flask web sunucusu (Render için)
+# Flask web sunucusu
 app = Flask(__name__)
 @app.route('/')
 def home():
@@ -47,27 +47,30 @@ def ucret_hesapla(toplam_dakika):
     ucret = saat * 40 + (math.ceil(dakika_kalan / 15) * 10)
     return ucret
 
+# OCR API fonksiyonu
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
+    bot.reply_to(message, "🔍 Plaka taranıyor...")
     file_info = bot.get_file(message.photo[-1].file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
-    file_path = "temp_plaka.jpg"
-    with open(file_path, "wb") as f: f.write(downloaded_file)
+    # Telegram dosya linkini al
+    file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
     
+    # OCR.space API kullanarak fotoğrafı gönder
+    api_url = f"https://api.ocr.space/parse/imageurl?apikey=K82218084588957&url={file_url}"
     try:
-        plaka = pytesseract.image_to_string(
-            Image.open(file_path), 
-            config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-        ).strip().upper()
+        response = requests.get(api_url).json()
+        parsed_text = response['ParsedResults'][0]['ParsedText'].upper()
+        # Sadece harf ve rakamları al
+        plaka = re.sub(r'[^A-Z0-9]', '', parsed_text)
         
         if len(plaka) >= 5:
             message.text = plaka
-            bot.reply_to(message, f"🔍 Tespit edilen: *{plaka}*", parse_mode="Markdown")
+            bot.reply_to(message, f"✅ Tespit edilen: *{plaka}*", parse_mode="Markdown")
             islem(message)
         else:
-            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen daha net çek.")
-    finally:
-        if os.path.exists(file_path): os.remove(file_path)
+            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen plaka kısmına daha yakın çek.")
+    except:
+        bot.reply_to(message, "⚠️ Plaka tarama servisi şu an cevap vermiyor. Lütfen manuel yaz.")
 
 @bot.message_handler(func=lambda message: True)
 def islem(message):
@@ -108,6 +111,6 @@ def islem(message):
 
 if __name__ == "__main__":
     Thread(target=run_flask).start()
-    time.sleep(5) # Render portu yakalasın diye
+    time.sleep(5)
     bot.infinity_polling()
-    
+            

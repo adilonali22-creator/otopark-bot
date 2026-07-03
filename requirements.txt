@@ -4,6 +4,9 @@ Flask
 Pillow
 pytesseract
 requests
+opencv-python-headless
+numpy
+
 
 
 

@@ -3,7 +3,7 @@ import os
 import json
 import math
 import time
-import requests # API üzerinden okuma yapmak için
+import requests
 import re
 from datetime import datetime
 import pytz
@@ -47,20 +47,23 @@ def ucret_hesapla(toplam_dakika):
     ucret = saat * 40 + (math.ceil(dakika_kalan / 15) * 10)
     return ucret
 
-# OCR API fonksiyonu
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     bot.reply_to(message, "🔍 Plaka taranıyor...")
     file_info = bot.get_file(message.photo[-1].file_id)
-    # Telegram dosya linkini al
-    file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
+    downloaded_file = bot.download_file(file_info.file_path)
     
-    # OCR.space API kullanarak fotoğrafı gönder
-    api_url = f"https://api.ocr.space/parse/imageurl?apikey=K82218084588957&url={file_url}"
+    temp_filename = "temp_plaka.jpg"
+    with open(temp_filename, "wb") as new_file:
+        new_file.write(downloaded_file)
+    
     try:
-        response = requests.get(api_url).json()
+        with open(temp_filename, 'rb') as f:
+            payload = {'apikey': 'K82218084588957', 'language': 'eng'}
+            files = {'file': f}
+            response = requests.post('https://api.ocr.space/parse/image', data=payload, files=files).json()
+            
         parsed_text = response['ParsedResults'][0]['ParsedText'].upper()
-        # Sadece harf ve rakamları al
         plaka = re.sub(r'[^A-Z0-9]', '', parsed_text)
         
         if len(plaka) >= 5:
@@ -68,9 +71,11 @@ def handle_photo(message):
             bot.reply_to(message, f"✅ Tespit edilen: *{plaka}*", parse_mode="Markdown")
             islem(message)
         else:
-            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen plaka kısmına daha yakın çek.")
-    except:
-        bot.reply_to(message, "⚠️ Plaka tarama servisi şu an cevap vermiyor. Lütfen manuel yaz.")
+            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen daha net ve yakın çek.")
+    except Exception as e:
+        bot.reply_to(message, f"⚠️ Hata: {str(e)}")
+    finally:
+        if os.path.exists(temp_filename): os.remove(temp_filename)
 
 @bot.message_handler(func=lambda message: True)
 def islem(message):

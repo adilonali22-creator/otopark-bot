@@ -3,6 +3,7 @@ pytz
 Flask
 Pillow
 pytesseract
+requests
 
 
 

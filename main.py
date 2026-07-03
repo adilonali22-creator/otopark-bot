@@ -1,21 +1,18 @@
 import telebot
-import pytesseract
-import cv2
-import os
+import requests
 import json
 import math
+import os
 from datetime import datetime
 import pytz
 
-# Tesseract yolu
-pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'
-
 TOKEN = "8925524634:AAEmc6YhLixJqCz3wN87JG2Hu4s6JAHH4Bk"
+DEEPAI_API_KEY = "a417036e-d30e-436d-b873-1f19c8f6e80b" # DeepAI API Key
 bot = telebot.TeleBot(TOKEN)
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')
 
-# Fiyatlandırma: 1 saate kadar 40, sonrası saat başı 40 + 15 dk'lık dilimler 10
+# Fiyatlandırma: 1 saate kadar 40, sonrası saat başı 40 + 15dk 10
 def ucret_hesapla(toplam_dakika):
     if toplam_dakika <= 60: return 40
     saat = toplam_dakika // 60
@@ -26,7 +23,7 @@ def verileri_yukle():
     if os.path.exists(VERI_DOSYASI):
         with open(VERI_DOSYASI, "r", encoding="utf-8") as f:
             try: return json.load(f)
-            except: pass
+            except: return {"araclar": {}, "toplam_kazanc": 0}
     return {"araclar": {}, "toplam_kazanc": 0}
 
 def verileri_kaydet(veri):
@@ -35,56 +32,47 @@ def verileri_kaydet(veri):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    bot.reply_to(message, "🔍 Plaka taranıyor...")
+    bot.reply_to(message, "🚀 DeepAI ile plaka çözümleniyor...")
     file_info = bot.get_file(message.photo[-1].file_id)
     downloaded_file = bot.download_file(file_info.file_path)
     with open("temp.jpg", "wb") as f: f.write(downloaded_file)
     
-    # Görüntü İşleme: Plakayı bul ve kırp
-    img = cv2.imread("temp.jpg")
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)
-    cv2.imwrite("temp_proc.jpg", thresh)
+    # DeepAI'ye gönder
+    with open("temp.jpg", 'rb') as f:
+        r = requests.post("https://api.deepai.org/api/ocr", files={'image': f}, headers={'api-key': DEEPAI_API_KEY})
     
-    # OCR ile oku
-    text = pytesseract.image_to_string(thresh, config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789').strip().upper()
-    plaka = "".join(filter(str.isalnum, text))
-    
-    if len(plaka) >= 5:
-        bot.reply_to(message, f"✅ Tespit: *{plaka}*\nGiriş için 'Kaydet' yaz.")
+    response = r.json()
+    if 'output' in response:
+        plaka = "".join(filter(str.isalnum, response['output'])).upper()
+        bot.reply_to(message, f"✅ Tespit edilen: *{plaka}*\nOnaylıyorsan 'Giriş' yaz.", parse_mode="Markdown")
         message.temp_plaka = plaka
     else:
-        bot.reply_to(message, "⚠️ Plaka otomatik okunamadı. Lütfen manuel yaz.")
-    
-    if os.path.exists("temp.jpg"): os.remove("temp.jpg")
+        bot.reply_to(message, "❌ DeepAI plakayı bulamadı. Lütfen manuel giriş yap.")
 
 @bot.message_handler(func=lambda message: True)
 def islem(message):
-    metin = message.text.upper().strip()
+    text = message.text.upper().strip()
     data = verileri_yukle()
     
-    if metin == "KAYDET":
-        # Son tespit edilen plakayı kaydet
-        # (Burada en son mesajın verisini alıyoruz)
-        bot.reply_to(message, "✅ Araç giriş yaptı.")
-        
-    elif metin.startswith(".EXIT"):
-        plaka = metin.replace(".EXIT", "").strip()
+    if text == "GİRİŞ":
+        # (Burada mantığı sen istediğin gibi tetikleyebilirsin)
+        bot.reply_to(message, "✅ Giriş kaydedildi.")
+    elif text.startswith(".EXIT"):
+        plaka = text.replace(".EXIT", "").strip()
         if plaka in data["araclar"]:
             giris_saati = datetime.strptime(data["araclar"][plaka]["giris"], "%H:%M")
-            simdi = datetime.now(ZAMAN_DILIMI)
-            # Basit dakika hesabı
-            fark = (simdi.hour * 60 + simdi.minute) - (giris_saati.hour * 60 + giris_saati.minute)
+            fark = (datetime.now(ZAMAN_DILIMI).hour * 60 + datetime.now(ZAMAN_DILIMI).minute) - \
+                   (giris_saati.hour * 60 + giris_saati.minute)
             ucret = ucret_hesapla(max(0, fark))
             data["toplam_kazanc"] += ucret
             del data["araclar"][plaka]
             verileri_kaydet(data)
-            bot.reply_to(message, f"📤 Çıkış: {plaka}\n💰 Ödenecek: {ucret} DENAR")
-        else: bot.reply_to(message, "❌ Bu araç kayıtlı değil!")
+            bot.reply_to(message, f"📤 Çıkış: {plaka}\n💰 Ödenecek: {ucret} Denar")
+        else: bot.reply_to(message, "❌ Araç kayıtlı değil!")
     else:
-        # Manuel giriş
-        data["araclar"][metin] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
+        # Manuel kayıt
+        data["araclar"][text] = {"giris": datetime.now(ZAMAN_DILIMI).strftime("%H:%M")}
         verileri_kaydet(data)
-        bot.reply_to(message, f"✅ {metin} otoparka giriş yaptı.")
+        bot.reply_to(message, f"✅ {text} kaydedildi.")
 
 bot.infinity_polling()

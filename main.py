@@ -6,7 +6,8 @@ from datetime import datetime
 import pytz
 from flask import Flask
 from threading import Thread
-import easyocr
+import pytesseract
+from PIL import Image
 
 # Flask web sunucusu
 app = Flask(__name__)
@@ -22,7 +23,6 @@ TOKEN = "8925524634:AAEmc6YhLixJqCz3wN87JG2Hu4s6JAHH4Bk"
 bot = telebot.TeleBot(TOKEN)
 VERI_DOSYASI = "otopark_verileri.json"
 ZAMAN_DILIMI = pytz.timezone('Europe/Skopje')
-reader = easyocr.Reader(['en']) 
 
 def verileri_yukle():
     if os.path.exists(VERI_DOSYASI):
@@ -53,14 +53,18 @@ def handle_photo(message):
     with open(file_path, "wb") as f: f.write(downloaded_file)
     
     try:
-        results = reader.readtext(file_path, detail=0, allowlist='ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
-        plaka = "".join(results).upper()
-        if plaka:
+        # Pytesseract ile okuma (psm 7: tek satır, whitelist: sadece harf/rakam)
+        plaka = pytesseract.image_to_string(
+            Image.open(file_path), 
+            config='--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+        ).strip().upper()
+        
+        if len(plaka) >= 5:
             message.text = plaka
             bot.reply_to(message, f"🔍 Tespit edilen: *{plaka}*", parse_mode="Markdown")
             islem(message)
         else:
-            bot.reply_to(message, "❌ Plaka okunamadı.")
+            bot.reply_to(message, "❌ Plaka okunamadı. Lütfen daha net ve yakın çek.")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
@@ -104,4 +108,4 @@ def islem(message):
 if __name__ == "__main__":
     Thread(target=run_flask).start()
     bot.infinity_polling()
-    
+        
